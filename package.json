@@ -1,0 +1,11 @@
+{
+  "name": "price-elsewhere",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Chrome extension comparing a product's price across Ozon, Wildberries and Yandex Market. No runtime dependencies; the tests need none either.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node tests/run.cjs",
+    "check": "for f in src/*.js popup/*.js; do node --check \"$f\" || exit 1; done && node tests/run.cjs"
+  }
+}

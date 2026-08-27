@@ -106,6 +106,26 @@ One detail that decides the architecture: **Ozon and Yandex Market do not answer
 only a browser.** The extension runs inside your browser, so it has that data; a server-side
 scraper would not.
 
+## Tests
+
+13 checks over the core — spec parsing, query building, accessory rejection and, above all,
+picking the *usual* price rather than the lowest one. No dependencies: `config`/`query`/`pick`
+are pure functions that need neither a browser nor a DOM.
+
+```bash
+npm test
+```
+
+Each check holds a failure that already happened or would have been expensive:
+
+- **`\b` against Cyrillic.** In JavaScript a word boundary is Latin-only, so `/мАч\b/` never
+  fires — the entire spec-matching layer dies silently on Russian titles and products start
+  "matching" wrongly.
+- **The bait in the cheap tail.** On live WB results for `airpods pro 2` the usual price is
+  10 282 ₽ while the cheapest item is 828 ₽, brand field set to Apple by the seller. The test
+  demands the computed price stay near ten thousand rather than drift to the counterfeit.
+- **Anchor off by a multiple** — the median is discarded and only the open page's price is used.
+
 ## Privacy
 
 - Nothing is sent anywhere. No account, no backend, no analytics.
