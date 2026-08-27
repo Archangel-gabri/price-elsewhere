@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Где дешевле</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --soft: #f5f6f8;
+    --line: rgba(16, 18, 22, 0.09);
+    --text: #14161a;
+    --muted: #6d7480;
+    --good: #0f9d58;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17191e;
+      --soft: #1e2128;
+      --line: rgba(255, 255, 255, 0.11);
+      --text: #eceef2;
+      --muted: #98a0ac;
+      --good: #3ecf8e;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    width: 316px;
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 15px 16px 13px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mark { display: flex; align-items: center; gap: 4px; }
+  .mark img { width: 20px; height: 20px; border-radius: 5px; display: block; object-fit: contain; }
+
+  h1 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: 0.01em; }
+
+  .lead {
+    padding: 14px 16px 4px;
+    color: var(--text);
+    font-size: 13.5px;
+  }
+
+  ul {
+    margin: 10px 0 0;
+    padding: 0 16px 14px 16px;
+    list-style: none;
+  }
+
+  li {
+    display: flex;
+    gap: 9px;
+    padding: 5px 0;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  li b { color: var(--text); font-weight: 600; }
+  li span.n { color: var(--good); font-weight: 700; flex: none; width: 12px; }
+
+  .switch {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin: 0 12px 12px;
+    padding: 11px 12px;
+    background: var(--soft);
+    border-radius: 11px;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .switch .txt { flex: 1 1 auto; }
+  .switch .label { font-size: 13.5px; font-weight: 550; }
+  .switch .state { font-size: 12px; color: var(--muted); margin-top: 1px; font-weight: 400; }
+
+  .track {
+    flex: none;
+    width: 38px;
+    height: 22px;
+    border-radius: 11px;
+    background: rgba(120, 128, 140, 0.35);
+    position: relative;
+    transition: background 160ms ease;
+  }
+
+  .track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .switch.on .track { background: var(--good); }
+  .switch.on .track::after { transform: translateX(16px); }
+
+  footer {
+    padding: 11px 16px 14px;
+    border-top: 1px solid var(--line);
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="mark" id="mark"></span>
+  <h1>Где дешевле</h1>
+</header>
+
+<div class="lead">
+  Открываете товар на Ozon, Wildberries или Яндекс Маркете — расширение само
+  проверяет две другие площадки и показывает, где дешевле.
+</div>
+
+<ul>
+  <li><span class="n">1</span><span>Работает <b>само</b>. Настраивать нечего.</span></li>
+  <li><span class="n">2</span><span>Сравнивает <b>цену на витрине</b> — ту, что видите вы.</span></li>
+  <li><span class="n">3</span><span>Ничего <b>никуда не отправляет</b>, аккаунт не нужен.</span></li>
+</ul>
+
+<div class="switch" id="sw">
+  <div class="txt">
+    <div class="label">Показывать панель</div>
+    <div class="state" id="state">включено</div>
+  </div>
+  <div class="track"></div>
+</div>
+
+<footer>Панель появляется внизу справа на карточке товара. Клик по заголовку сворачивает её.</footer>
+
+<script src="../src/config.js"></script>
+<script src="../src/logos.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

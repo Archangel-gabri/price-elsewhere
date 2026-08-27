@@ -1,0 +1,318 @@
+/* Панель живёт поверх чужой вёрстки, поэтому каждое свойство задаётся явно:
+   у маркетплейсов агрессивные глобальные стили, наследовать от них нельзя. */
+
+#tc-panel {
+  --tc-bg: #ffffff;
+  --tc-bg-soft: #f6f7f9;
+  --tc-line: rgba(16, 18, 22, 0.09);
+  --tc-text: #14161a;
+  --tc-muted: #6d7480;
+  --tc-good: #0f9d58;
+  --tc-good-bg: rgba(15, 157, 88, 0.10);
+  --tc-bad: #d8453f;
+  --tc-warn: #b26a00;
+  --tc-warn-bg: rgba(214, 145, 30, 0.13);
+  --tc-shadow: 0 8px 32px rgba(16, 18, 22, 0.14), 0 1px 3px rgba(16, 18, 22, 0.08);
+
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483000;
+  width: 326px;
+  max-width: calc(100vw - 32px);
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--tc-line);
+  border-radius: 16px;
+  background: var(--tc-bg);
+  box-shadow: var(--tc-shadow);
+  color: var(--tc-text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.35;
+  text-align: left;
+  overflow: hidden;
+  animation: tc-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-color-scheme: dark) {
+  #tc-panel {
+    --tc-bg: #17191e;
+    --tc-bg-soft: #1e2128;
+    --tc-line: rgba(255, 255, 255, 0.11);
+    --tc-text: #eceef2;
+    --tc-muted: #98a0ac;
+    --tc-good: #3ecf8e;
+    --tc-good-bg: rgba(62, 207, 142, 0.13);
+    --tc-bad: #f0736e;
+    --tc-warn: #e0a34a;
+    --tc-warn-bg: rgba(224, 163, 74, 0.15);
+    --tc-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@keyframes tc-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+#tc-panel * { box-sizing: border-box; }
+
+/* ── шапка ───────────────────────────────────────────────────────────── */
+
+#tc-panel .tc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px 11px 14px;
+  border-bottom: 1px solid var(--tc-line);
+  cursor: pointer;
+  user-select: none;
+}
+
+#tc-panel .tc-mark {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+}
+
+#tc-panel .tc-mark img {
+  display: block;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+#tc-panel .tc-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--tc-text);
+  margin: 0;
+}
+
+#tc-panel .tc-fold {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tc-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 120ms ease, transform 180ms ease;
+}
+
+#tc-panel .tc-fold:hover { background: var(--tc-bg-soft); color: var(--tc-text); }
+#tc-panel.tc-folded .tc-fold { transform: rotate(180deg); }
+#tc-panel.tc-folded .tc-body,
+#tc-panel.tc-folded .tc-foot { display: none; }
+#tc-panel.tc-folded .tc-head { border-bottom: 0; }
+
+/* ── строки площадок ─────────────────────────────────────────────────── */
+
+#tc-panel .tc-body { padding: 6px; }
+
+#tc-panel .tc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 120ms ease;
+}
+
+#tc-panel a.tc-row:hover { background: var(--tc-bg-soft); }
+#tc-panel a.tc-row:hover .tc-go { opacity: 1; transform: none; }
+
+#tc-panel .tc-row.tc-best { background: var(--tc-good-bg); }
+#tc-panel a.tc-row.tc-best:hover { background: var(--tc-good-bg); filter: brightness(1.04); }
+
+/* Логотип площадки. Знак и есть подпись: человек узнаёт Ozon и WB
+   раньше, чем успевает прочитать название. */
+#tc-panel .tc-logo {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  object-fit: contain;
+  background: transparent;
+}
+
+#tc-panel .tc-info { flex: 1 1 auto; min-width: 0; }
+
+#tc-panel .tc-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tc-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#tc-panel .tc-sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--tc-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#tc-panel .tc-found {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── строка, в которой мы не уверены ─────────────────────────────────
+   Цена показана, но приглушена, и разницы в рублях рядом нет: разница —
+   это обещание «столько сэкономишь», а мы не знаем, тот ли это товар.
+   Полоска слева отличает такую строку от обычной боковым зрением. */
+
+#tc-panel .tc-row.tc-doubtful {
+  flex-wrap: wrap;
+  box-shadow: inset 2px 0 0 var(--tc-warn);
+  background: var(--tc-warn-bg);
+}
+
+/* При flex-wrap колонка с названием требует ширину по своему тексту и
+   выталкивает цену на следующую строку. Базис 0 возвращает цену на место. */
+#tc-panel .tc-row.tc-doubtful .tc-info { flex: 1 1 0; }
+
+#tc-panel a.tc-row.tc-doubtful:hover { background: var(--tc-warn-bg); filter: brightness(1.05); }
+
+/* Во всю ширину строки: рядом с ценой пояснение обрезается на полуслове,
+   а это ровно то место, ради которого строка и показана. */
+#tc-panel .tc-why {
+  flex: 1 0 100%;
+  margin-top: 7px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+#tc-panel .tc-flag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tc-warn);
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  padding: 1px 4px;
+  line-height: 1.25;
+}
+
+/* Причина переносится, а не обрезается: «подозрительно дёшево · обычно
+   9 450 ₽» в одну строку не влезает, а обрубок «обычно …» бесполезен. */
+#tc-panel .tc-reason {
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--tc-warn);
+  min-width: 0;
+}
+
+#tc-panel .tc-price.tc-soft { color: var(--tc-muted); font-weight: 600; }
+#tc-panel .tc-delta.tc-usual { font-weight: 500; opacity: 0.9; }
+
+#tc-panel .tc-right {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 74px;
+}
+
+#tc-panel .tc-price {
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--tc-text);
+}
+
+#tc-panel .tc-row.tc-best .tc-price { color: var(--tc-good); }
+#tc-panel .tc-price.tc-none { font-size: 12.5px; font-weight: 500; color: var(--tc-muted); }
+
+#tc-panel .tc-delta {
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--tc-muted);
+}
+
+#tc-panel .tc-delta.tc-win { color: var(--tc-good); }
+#tc-panel .tc-delta.tc-lose { color: var(--tc-bad); opacity: 0.75; }
+
+#tc-panel .tc-go {
+  width: 14px;
+  height: 14px;
+  color: var(--tc-muted);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+#tc-panel .tc-here {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--tc-muted);
+  background: var(--tc-bg-soft);
+  border-radius: 5px;
+  padding: 2px 5px;
+}
+
+/* ── скелетон загрузки ───────────────────────────────────────────────── */
+
+#tc-panel .tc-skel {
+  height: 11px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--tc-bg-soft) 25%, var(--tc-line) 37%, var(--tc-bg-soft) 63%);
+  background-size: 400% 100%;
+  animation: tc-shimmer 1.3s ease-in-out infinite;
+}
+
+#tc-panel .tc-skel.tc-w-name { width: 62%; }
+#tc-panel .tc-skel.tc-w-price { width: 56px; height: 13px; }
+
+@keyframes tc-shimmer {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
+}
+
+/* ── подвал ──────────────────────────────────────────────────────────── */
+
+#tc-panel .tc-foot {
+  padding: 8px 14px 11px;
+  border-top: 1px solid var(--tc-line);
+  font-size: 11px;
+  color: var(--tc-muted);
+}
+
+#tc-panel .tc-q {
+  color: var(--tc-text);
+  opacity: 0.75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+#tc-panel .tc-note { margin-top: 3px; display: block; opacity: 0.85; }
