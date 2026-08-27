@@ -161,6 +161,17 @@ Works in Chrome, Yandex Browser, Edge and other Chromium browsers.
 Only the service worker may talk to other domains. The content script asks "compare this" and
 receives a finished answer.
 
+**The boundary is drawn in the manifest, and it is not a formality.** The content script loads
+`config · query · detect · logos · panel · content` — everything that touches the page. The service
+worker pulls `config · query · pick · sources` through `importScripts` — everything that reaches the
+network and decides which offer to trust. `query.js` deliberately lands on both sides: title parsing
+is needed where the product is identified and where other marketplaces' cards are matched.
+
+The practical consequence: **pure functions are separated from everything else.** `query` and `pick`
+know nothing about the DOM or the network — only strings and numbers. That is why plain Node tests
+them without a browser, while all the uncertainty (cookies, a 429 from a marketplace, a sleeping
+worker) stays in `sources` and `background`, where it has to be handled.
+
 ## A rake already stepped on
 
 In JavaScript, the word boundary `\b` and the class `\w` are **Latin-only** — Cyrillic letters do
