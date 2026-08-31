@@ -108,9 +108,9 @@ scraper would not.
 
 ## Tests
 
-13 checks over the core — spec parsing, query building, accessory rejection and, above all,
-picking the *usual* price rather than the lowest one. No dependencies: `config`/`query`/`pick`
-are pure functions that need neither a browser nor a DOM.
+19 offline checks cover spec parsing, query building, accessory rejection, service-worker cache
+identity and, above all, picking the *usual* price rather than the lowest one. No dependencies:
+the checks need neither a browser nor a DOM and never contact a marketplace.
 
 ```bash
 npm test
@@ -125,6 +125,10 @@ Each check holds a failure that already happened or would have been expensive:
   10 282 ₽ while the cheapest item is 828 ₽, brand field set to Apple by the seller. The test
   demands the computed price stay near ten thousand rather than drift to the counterfeit.
 - **Anchor off by a multiple** — the median is discarded and only the open page's price is used.
+- **Model-code boundaries.** `S10` must not match `S100`, while a split `WH 1000 XM5` must still
+  match `WH1000XM5`.
+- **Cache identity.** Two capacities that intentionally share the same search query must not share
+  the service worker's ten-minute result cache.
 
 ## Privacy
 

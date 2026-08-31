@@ -50,11 +50,25 @@ check('«128 ГБ» распознаётся', TC.parseSpecs('iPhone 15 128 ГБ
 ok('20000 мАч конфликтует с 10000 мАч',
   TC.specConflict(TC.parseSpecs('Повербанк 20000 мАч'), TC.parseSpecs('Повербанк 10000 мАч'))?.hard === true,
   'разная ёмкость обязана быть жёстким расхождением');
+ok('1 ТБ конфликтует с 512 ГБ',
+  TC.specConflict(TC.parseSpecs('SSD 1 ТБ'), TC.parseSpecs('SSD 512 ГБ'))?.hard === true,
+  'единицы не должны скрывать разный объём памяти');
+check('1 ТБ эквивалентен 1024 ГБ',
+  TC.specConflict(TC.parseSpecs('SSD 1 ТБ'), TC.parseSpecs('SSD 1024 ГБ')), null);
+check('1 ТБ эквивалентен маркетинговым 1000 ГБ',
+  TC.specConflict(TC.parseSpecs('SSD 1 ТБ'), TC.parseSpecs('SSD 1000 ГБ')), null);
 
 console.log('\n── Запрос из названия-ключевика');
 const jbl = TC.buildQuery('Наушники беспроводные JBL Tune 520BT накладные Bluetooth с микрофоном чёрные', 'JBL');
 check('из мусорного названия остаётся суть', jbl.text, 'jbl tune 520bt');
 ok('код модели попал в обязательные слова', jbl.must.includes('520bt'), JSON.stringify(jbl.must));
+
+const galaxyS10 = TC.buildQuery('Samsung Galaxy S10', 'Samsung');
+check('код S10 не совпадает с более длинным S100',
+  TC.nameMatches(galaxyS10, 'Samsung Galaxy S100'), false);
+const sonyXm5 = TC.buildQuery('Sony WH1000XM5', 'Sony');
+check('слитный код находится в соседних токенах',
+  TC.nameMatches(sonyXm5, 'Sony WH 1000 XM5'), true);
 
 console.log('\n── Аксессуары не выдаются за товар');
 ok('чехол отсеивается', TC.isAccessory('Чехол для наушников JBL Tune 520BT') === true);

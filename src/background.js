@@ -39,7 +39,10 @@ var compare = function (payload) {
   var q = TC.buildQuery(payload.title, payload.brand);
   var anchor = Number(payload.price) > 0 ? Number(payload.price) : null;
   var targets = TC.ORDER.filter(function (s) { return s !== payload.site; });
-  var key = payload.site + '|' + q.text + '|' + (anchor || 0);
+  // Выбор карточки зависит не только от текста поиска, но и от specs,
+  // must, brand и source. Характеристики намеренно убираются из q.text,
+  // поэтому ключ только по q.text склеивал 10000mAh и 20000mAh.
+  var key = JSON.stringify([payload.site, q, anchor || 0]);
 
   var cached = cacheGet(key);
   if (cached) return Promise.resolve(cached);

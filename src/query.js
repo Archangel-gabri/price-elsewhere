@@ -170,6 +170,20 @@ TC.specConflict = function (a, b) {
     if (Math.abs(a[k] - b[k]) < 1e-9) continue;
     return { key: k, label: sp.label, hard: sp.hard, ours: a[k], theirs: b[k] };
   }
+
+  // Один и тот же SSD пишут как 1 ТБ, 1000 ГБ или 1024 ГБ. Если единицы
+  // разные, обычный проход выше не видит общего ключа и молча принимает
+  // даже 1 ТБ за 512 ГБ. Сравниваем кросс-единицы, но принимаем оба
+  // распространённых обозначения терабайта.
+  var tb = null, gb = null, ours = null, theirs = null;
+  if (a.tb != null && a.gb == null && b.gb != null && b.tb == null) {
+    tb = a.tb; gb = b.gb; ours = a.tb; theirs = b.gb;
+  } else if (a.gb != null && a.tb == null && b.tb != null && b.gb == null) {
+    tb = b.tb; gb = a.gb; ours = a.gb; theirs = b.tb;
+  }
+  if (tb != null && gb !== tb * 1000 && gb !== tb * 1024) {
+    return { key: 'storage', label: 'память', hard: true, ours: ours, theirs: theirs };
+  }
   return null;
 };
 
@@ -280,12 +294,21 @@ TC.buildQuery = function (title, brand) {
   };
 };
 
-// Длинные токены ищем и по слитному названию: «20 000» в одном месте и
-// «20000» в другом — это одно и то же. Для коротких так делать нельзя:
-// цифра «2» найдётся подстрокой в любом «2024» или «256».
-var has = function (set, flat, token) {
-  if (token.length <= 2) return set.has(token);
-  return set.has(token) || flat.indexOf(token) >= 0;
+// Модель может быть написана слитно или с разделителями: WH1000XM5 / WH 1000 XM5.
+// Склеиваем только соседние целые токены и требуем точное равенство. Поиск по
+// полностью склеенной строке ошибочно считал S10 частью S100.
+var has = function (tokens, set, token) {
+  if (set.has(token)) return true;
+  if (token.length <= 2) return false;
+
+  for (var i = 0; i < tokens.length; i++) {
+    var joined = '';
+    for (var j = i; j < tokens.length && joined.length < token.length; j++) {
+      joined += tokens[j];
+      if (joined === token) return true;
+    }
+  }
+  return false;
 };
 
 // Похоже ли содержимое поля «бренд» на бренд. На WB туда попадает что угодно:
@@ -303,20 +326,20 @@ var looksLikeBrand = function (s) {
  *                         кроссовкам подберутся 574-е.
  */
 TC.nameMatches = function (q, candidateTitle) {
-  var set = new Set(TC.tokenize(candidateTitle));
-  var flat = TC.flatten(candidateTitle);
+  var tokens = TC.tokenize(candidateTitle);
+  var set = new Set(tokens);
   var must = q.must || q.model || [];
 
   // Код модели и числа обязаны найтись. Без этого «AirPods Pro 2» спокойно
   // находит «AirPods Pro 3»: совпадают три слова из четырёх, порога хватает.
   for (var i = 0; i < must.length; i++) {
-    if (!has(set, flat, must[i])) return false;
+    if (!has(tokens, set, must[i])) return false;
   }
 
   var words = q.all.filter(function (t) { return must.indexOf(t) < 0; });
   if (!words.length) return must.length > 0;
 
-  var hit = words.filter(function (w) { return has(set, flat, w); }).length;
+  var hit = words.filter(function (w) { return has(tokens, set, w); }).length;
 
   // Длинный буквенно-цифровой код («520bt», «wh1000xm5») уникален сам по себе —
   // хватает одного подтверждающего слова. Голая цифра («Pro 2») не уникальна:
