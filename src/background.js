@@ -4,15 +4,25 @@ importScripts('/src/config.js', '/src/query.js', '/src/pick.js', '/src/sources.j
 
 var cache = new Map();
 
+// Cache ограничен 120 записями, поэтому полный проход при операции
+// остаётся bounded и не даёт просроченным ответам жить до случайного eviction.
+var cachePurgeExpired = function (now) {
+  cache.forEach(function (entry, key) {
+    if (now - entry.at > TC.CACHE_TTL_MS) cache.delete(key);
+  });
+};
+
 var cacheGet = function (key) {
+  cachePurgeExpired(Date.now());
   var hit = cache.get(key);
   if (!hit) return null;
-  if (Date.now() - hit.at > TC.CACHE_TTL_MS) { cache.delete(key); return null; }
   return hit.value;
 };
 
 var cacheSet = function (key, value) {
-  cache.set(key, { at: Date.now(), value: value });
+  var now = Date.now();
+  cachePurgeExpired(now);
+  cache.set(key, { at: now, value: value });
   if (cache.size > 120) cache.delete(cache.keys().next().value);
 };
 
@@ -52,7 +62,10 @@ var compare = function (payload) {
   })).then(function (pairs) {
     var out = { query: q.text, results: {} };
     pairs.forEach(function (p) { out.results[p[0]] = p[1]; });
-    cacheSet(key, out);
+    // 429, captcha, timeout и другие transient-ошибки должны иметь шанс
+    // исчезнуть при следующем compare, а не выглядеть как 10-минутный success.
+    var cacheable = pairs.every(function (p) { return p[1].status !== 'error'; });
+    if (cacheable) cacheSet(key, out);
     return out;
   });
 };

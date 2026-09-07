@@ -11,8 +11,13 @@
     var current = TC.detect();
     if (!current) return false;
 
-    var key = current.site + ':' + current.id;
-    if (key === lastKey) return true;
+    // Заголовок часто появляется раньше цены. Если запомнить только product id,
+    // следующая retry-попытка не донесёт позднее отрисованную цену до worker.
+    var key = current.site + ':' + current.id + ':'
+      + (current.price == null ? 'pending-price' : current.price);
+    // Пока цена не появилась, одинаковый pending-state не должен останавливать
+    // retry-таймер: на тяжёлой карточке первый рендер может занять больше 500 мс.
+    if (key === lastKey) return current.price != null;
     lastKey = key;
 
     if (!settings.enabled) { TC.Panel.destroy(); return true; }
@@ -30,7 +35,7 @@
       );
     } catch (e) { /* расширение перезагрузили — панель просто останется пустой */ }
 
-    return true;
+    return current.price != null;
   };
 
   // Карточка на Ozon и Маркете дорисовывается после загрузки страницы,

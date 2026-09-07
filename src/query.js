@@ -210,6 +210,79 @@ var isUnitToken = function (t) {
 // Год выпуска — исключение, он ничего не различает.
 var isNumber = function (t) { return /^\d{1,6}$/.test(t) && !/^(19|20)\d\d$/.test(t); };
 
+// Число модели и число характеристики могут совпасть: Xiaomi 12 12 ГБ.
+// Чтобы 12GB у чужой модели не засчиталось как модель 12,
+// вырезаем распознанные specs и считаем оставшиеся base-числа.
+var baseNumberCounts = function (title) {
+  var rest = stripArticles(String(title || '').toLowerCase().replace(/ё/g, 'е'));
+  TC.SPECS.forEach(function (spec) {
+    var previous;
+    do {
+      previous = rest;
+      rest = rest.replace(spec.re, ' ');
+    } while (rest !== previous);
+  });
+
+  var counts = {};
+  TC.tokenize(rest).forEach(function (token) {
+    if (isNumber(token)) counts[token] = (counts[token] || 0) + 1;
+  });
+  return counts;
+};
+
+// parseSpecs сохраняет первое значение для прежних потребителей. Для identity
+// нужны все вхождения: «8 ГБ 256 ГБ» содержит RAM и накопитель, а не одно число.
+var specOccurrences = function (title, spec) {
+  var rest = stripArticles(String(title || '').toLowerCase().replace(/ё/g, 'е'));
+  var out = [], match;
+  while ((match = rest.match(spec.re))) {
+    var raw = match[1] != null ? match[1] : match[2];
+    var value = parseFloat(String(raw).replace(/\s/g, '').replace(',', '.'));
+    if (isFinite(value) && value > 0) out.push({ text: match[0], value: value });
+    rest = rest.replace(spec.re, ' ');
+  }
+  return out;
+};
+
+var specNumberRoles = function (title, specs) {
+  var roles = {};
+  var add = function (token, key) {
+    if (!roles[token]) roles[token] = [];
+    if (roles[token].indexOf(key) < 0) roles[token].push(key);
+  };
+
+  TC.SPECS.forEach(function (spec) {
+    if (specs[spec.key] == null) return;
+    specOccurrences(title, spec).forEach(function (occurrence) {
+      TC.tokenize(occurrence.text).forEach(function (token) {
+        if (isNumber(token)) add(token, spec.key);
+      });
+      var integerValue = String(occurrence.value);
+      if (/^\d+$/.test(integerValue)) add(integerValue, spec.key);
+    });
+  });
+  return roles;
+};
+
+var numberRoleRequirements = function (title, numbers, specs) {
+  var baseCounts = baseNumberCounts(title);
+  var specRoles = specNumberRoles(title, specs);
+  var requirements = {};
+  numbers.forEach(function (token) {
+    requirements[token] = {
+      base: baseCounts[token] || 0,
+      specs: specRoles[token] || []
+    };
+  });
+  return requirements;
+};
+
+var hardSpecKeys = function (specs) {
+  return TC.SPECS.filter(function (spec) {
+    return spec.hard && specs[spec.key] != null;
+  }).map(function (spec) { return spec.key; });
+};
+
 /**
  * Название товара -> запрос и всё, что понадобится для сверки.
  * brand — если площадка отдала его отдельным полем, это надёжнее,
@@ -281,14 +354,18 @@ TC.buildQuery = function (title, brand) {
 
   // must — то, что обязано найтись в чужом названии: код модели и числа.
   // Всё остальное (бренд, слова описания) — лишь подтверждение.
-  var must = strong.slice(0, 2).concat(nums.slice(0, 3));
+  var requiredNumbers = nums.slice(0, 3);
+  var must = strong.slice(0, 2).concat(requiredNumbers);
+  var specs = TC.parseSpecs(title);
 
   return {
     text: text,
     all: picked,
     model: strong.slice(0, 2),
     must: must,
-    specs: TC.parseSpecs(title),
+    specs: specs,
+    requiredSpecs: hardSpecKeys(specs),
+    numberRoles: numberRoleRequirements(title, requiredNumbers, specs),
     brand: brand ? TC.flatten(brand) : '',
     source: String(title || '')
   };
@@ -311,6 +388,49 @@ var has = function (tokens, set, token) {
   return false;
 };
 
+var specValueMatches = function (sourceSpecs, candidateSpecs, key, sourceTitle, candidateTitle) {
+  var spec = TC.SPECS.filter(function (item) { return item.key === key; })[0];
+  var sourceValues = specOccurrences(sourceTitle, spec);
+  var candidateValues = specOccurrences(candidateTitle, spec);
+  // Роль RAM/накопителя по одной единице не угадываем. При повторениях
+  // требуем ту же последовательность и кратность, включая слитные единицы.
+  if (sourceValues.length > 1 || candidateValues.length > 1) {
+    return sourceValues.length === candidateValues.length
+      && sourceValues.every(function (item, index) {
+        return Math.abs(item.value - candidateValues[index].value) < 1e-9;
+      });
+  }
+  var sourceValue = sourceSpecs[key];
+  var candidateValue = candidateSpecs[key];
+  if (candidateValue != null) return Math.abs(candidateValue - sourceValue) < 1e-9;
+
+  // Ёмкость накопителя может быть записана в разных единицах. Сохраняем
+  // ту же эквивалентность, что и specConflict: 1 ТБ = 1000 или 1024 ГБ.
+  if (key === 'tb' && candidateSpecs.gb != null) {
+    var gbSpec = TC.SPECS.filter(function (item) { return item.key === 'gb'; })[0];
+    if (specOccurrences(candidateTitle, gbSpec).length > 1) return false;
+    return candidateSpecs.gb === sourceValue * 1000
+      || candidateSpecs.gb === sourceValue * 1024;
+  }
+  if (key === 'gb' && candidateSpecs.tb != null) {
+    var tbSpec = TC.SPECS.filter(function (item) { return item.key === 'tb'; })[0];
+    if (specOccurrences(candidateTitle, tbSpec).length > 1) return false;
+    return sourceValue === candidateSpecs.tb * 1000
+      || sourceValue === candidateSpecs.tb * 1024;
+  }
+  return false;
+};
+
+var numberRoleMatches = function (requirement, token, sourceSpecs, candidateSpecs, candidateTitle, sourceTitle) {
+  var candidateBase = baseNumberCounts(candidateTitle);
+  if ((candidateBase[token] || 0) < requirement.base) return false;
+
+  if (!requirement.base && !requirement.specs.length) return false;
+  return requirement.specs.every(function (key) {
+    return specValueMatches(sourceSpecs, candidateSpecs, key, sourceTitle, candidateTitle);
+  });
+};
+
 // Похоже ли содержимое поля «бренд» на бренд. На WB туда попадает что угодно:
 // «Power bank», «отличный», «-», «A.Pods Pro 2». Верим только одному слову
 // без цифр — всё остальное сравнивать бессмысленно.
@@ -329,10 +449,23 @@ TC.nameMatches = function (q, candidateTitle) {
   var tokens = TC.tokenize(candidateTitle);
   var set = new Set(tokens);
   var must = q.must || q.model || [];
+  var candidateSpecs = TC.parseSpecs(candidateTitle);
+
+  // Склеенная характеристика (128GB, 20000mAh) не попадает в nums, но
+  // остаётся таким же обязательным признаком, как раздельная «128 ГБ».
+  var requiredSpecs = q.requiredSpecs || [];
+  for (var s = 0; s < requiredSpecs.length; s++) {
+    if (!specValueMatches(q.specs || {}, candidateSpecs, requiredSpecs[s], q.source, candidateTitle)) return false;
+  }
 
   // Код модели и числа обязаны найтись. Без этого «AirPods Pro 2» спокойно
   // находит «AirPods Pro 3»: совпадают три слова из четырёх, порога хватает.
   for (var i = 0; i < must.length; i++) {
+    var numberRole = q.numberRoles && q.numberRoles[must[i]];
+    if (numberRole) {
+      if (!numberRoleMatches(numberRole, must[i], q.specs || {}, candidateSpecs, candidateTitle, q.source)) return false;
+      continue;
+    }
     if (!has(tokens, set, must[i])) return false;
   }
 

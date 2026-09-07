@@ -10,6 +10,12 @@ var CHEVRON = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns
   + '<path d="M4 6.5L8 10.5L12 6.5" stroke="currentColor" stroke-width="1.7" '
   + 'stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+var PANEL_PRICE_NOTE = 'Цены из поиска и карточек. Скидки банков/кошелька, доставка и пошлины могут отличаться; итог проверьте на площадке.';
+
+var panelPrice = function (value) {
+  return Number(value) > 0 ? (TC.money(value) || '—') : '—';
+};
+
 var el = function (tag, cls, txt) {
   var n = document.createElement(tag);
   if (cls) n.className = cls;
@@ -86,7 +92,7 @@ TC.Panel = {
 
       var right = el('div', 'tc-right');
       if (isHere) {
-        right.appendChild(el('div', 'tc-price', current.price ? TC.money(current.price) : '—'));
+        right.appendChild(el('div', 'tc-price', panelPrice(current.price)));
         right.appendChild(el('div', 'tc-here', 'вы здесь'));
       } else {
         right.appendChild(el('div', 'tc-skel tc-w-price'));
@@ -107,6 +113,7 @@ TC.Panel = {
     // подвал
     var foot = el('div', 'tc-foot');
     foot.appendChild(el('span', 'tc-q', 'ищем на двух других площадках…'));
+    foot.appendChild(el('span', 'tc-note', PANEL_PRICE_NOTE));
     panel.appendChild(foot);
 
     document.documentElement.appendChild(panel);
@@ -117,42 +124,36 @@ TC.Panel = {
   /**
    * Пришли ответы площадок.
    *
-   * У строки три состояния, а не два. Если мы не уверены, что нашли тот же
-   * товар, — цена показывается приглушённой и БЕЗ разницы в рублях. Разница
-   * в рублях — это обещание «вот столько сэкономишь», и давать его,
-   * когда нашлась реплика или другая комплектация, нельзя.
+   * Уверенность относится к совпадению товара. Источники не подтверждают
+   * одинаковые условия оплаты и обязательные доплаты, поэтому цены показываем
+   * без ранжирования и разницы в рублях даже для уверенного совпадения.
+   * Похожий товар сохраняет отдельную приглушённую цену и причину сомнения.
    */
   update: function (current, data) {
     if (!this.node) return;
     var self = this;
     var results = (data && data.results) || {};
 
-    // Самая низкая цена считается только по тем предложениям, в которых
-    // мы уверены. Иначе зелёным подсветится как раз подделка.
-    var prices = [];
-    if (current.price) prices.push(current.price);
-    TC.ORDER.forEach(function (s) {
-      var r = results[s];
-      if (r && r.status === 'ok' && r.sure) prices.push(r.item.price);
-    });
-    var best = prices.length > 1 ? Math.min.apply(null, prices) : null;
-    var doubted = false;
-
     TC.ORDER.forEach(function (site) {
       var row = self.rows[site];
       if (!row) return;
       row.classList.remove('tc-best', 'tc-doubtful');
+      // Повторный ответ заменяет прежние метки, включая старую разницу цены.
+      ['.tc-delta', '.tc-why'].forEach(function (selector) {
+        row.querySelectorAll(selector).forEach(function (node) {
+          node.parentNode.removeChild(node);
+        });
+      });
 
-      if (site === current.site) {
-        if (best !== null && current.price === best) row.classList.add('tc-best');
-        return;
-      }
+      if (site === current.site) return;
 
       var res = results[site] || { status: 'error' };
       var sub = row.querySelector('.tc-sub');
       var right = row.querySelector('.tc-right');
       sub.textContent = '';
       right.textContent = '';
+      row.href = TC.SITES[site].search(current.title);
+      row.title = '';
 
       if (res.status !== 'ok') {
         sub.textContent = res.status === 'nomatch'
@@ -168,24 +169,13 @@ TC.Panel = {
       sub.appendChild(el('div', 'tc-found', it.title));
 
       if (res.sure) {
-        right.appendChild(el('div', 'tc-price', TC.money(it.price)));
-        if (current.price) {
-          var diff = Math.round(it.price - current.price);
-          if (diff === 0) {
-            right.appendChild(el('div', 'tc-delta', 'столько же'));
-          } else {
-            var cls = diff < 0 ? 'tc-delta tc-win' : 'tc-delta tc-lose';
-            right.appendChild(el('div', cls, (diff < 0 ? '−' : '+') + TC.money(Math.abs(diff))));
-          }
-        }
-        if (best !== null && it.price === best) row.classList.add('tc-best');
+        right.appendChild(el('div', 'tc-price', panelPrice(it.price)));
         return;
       }
 
-      // Не уверены. Цена есть, обещания «дешевле» нет.
-      doubted = true;
+      // Не уверены в совпадении товара.
       row.classList.add('tc-doubtful');
-      right.appendChild(el('div', 'tc-price tc-soft', TC.money(it.price)));
+      right.appendChild(el('div', 'tc-price tc-soft', panelPrice(it.price)));
 
       // Пояснение — отдельной строкой во всю ширину: рядом с ценой оно
       // не помещается и обрезается на полуслове, а именно оно тут главное.
@@ -200,11 +190,6 @@ TC.Panel = {
     var foot = this.node.querySelector('.tc-foot');
     foot.textContent = '';
     foot.appendChild(el('span', 'tc-q', 'искали: ' + (data && data.query ? data.query : current.title)));
-    // Про цены формулировка нарочно осторожная. У WB берётся цена без скидки
-    // по Кошельку (её отдаёт поиск), у Ozon — плиточная, уже со скидкой по их
-    // карте. Обещать «со скидкой по карте» было бы неправдой для WB.
-    foot.appendChild(el('span', 'tc-note', doubted
-      ? 'серым — товар похож, но не факт что тот же: проверьте перед покупкой'
-      : 'цены те же, что в поиске этих площадок'));
+    foot.appendChild(el('span', 'tc-note', PANEL_PRICE_NOTE));
   }
 };

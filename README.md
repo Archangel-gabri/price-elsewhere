@@ -12,11 +12,13 @@ checks the other two, then shows a panel in the corner of the card:
 
 ```
 Ozon              2 397 ₽   you are here
-Wildberries       1 995 ₽      −402 ₽
-Яндекс Маркет     2 906 ₽      +509 ₽
+Wildberries       1 995 ₽
+Яндекс Маркет     2 906 ₽
 ```
 
-The lowest price is highlighted. Clicking a row opens that product on that marketplace.
+Illustrative prices. Clicking a result opens its marketplace page. The panel does not rank
+prices or calculate savings, even when the product match passes its checks: payment conditions,
+delivery and customs charges may differ. A visible note asks you to check the final cost on the marketplace.
 
 No build step. No dependencies. No backend. No account. Two checkboxes of stored state.
 
@@ -26,40 +28,37 @@ No build step. No dependencies. No backend. No account. Two checkboxes of stored
 
 ## The actual problem
 
-Matching a product across marketplaces is the whole difficulty, and it has no clean solution.
+Matching a product across marketplaces is the central difficulty in this implementation.
 
-There is **no shared identifier**. Wildberries has its `nmId`, Ozon has its SKU, Yandex Market
-has its own, and none of them map to each other. Barcodes and manufacturer part numbers are not
-exposed: on WB a card carries only the *seller's* article, which differs per seller, and on Ozon
-the barcode is visible in the seller dashboard alone. No public "this product = that product"
-database exists.
+The sources used here expose platform-specific identifiers: Wildberries has its `nmId`, Ozon
+has its SKU and Yandex Market has its own identifiers. This implementation has no verified map
+between them and does not assume that every response contains a barcode or manufacturer part number.
 
-So the only possible move is matching by title — and titles are keyword soup:
+It therefore matches titles and available product fields. Titles often contain search keywords:
 
 > «Наушники беспроводные JBL Tune 520BT накладные Bluetooth с микрофоном чёрные»
 
-Searching the whole string finds nothing. The extension extracts brand, model and numbers —
-`jbl tune 520bt` — and searches on that. **Numbers must match.** That sounds like a detail, but
-the whole thing rests on it: drop the `2` from "AirPods Pro 2" and the query happily returns
-AirPods Pro 3 and reports someone else's price.
+The extension extracts brand, model and numbers — `jbl tune 520bt` — to form a shorter query.
+Recognized model identifiers and required specifications must agree, allowing supported unit
+equivalences. Dropping the `2` from "AirPods Pro 2" can otherwise admit another generation.
+Title matching remains a heuristic, not proof that the offers are identical.
 
-## Why it does not take the cheapest offer
+## How an offer is selected
 
-This is the central decision in the extension.
+The raw minimum can belong to an accessory, used item, replica or different configuration.
+A low price alone does not establish any of those conditions, and a high price does not prove authenticity.
 
-Counterfeits, used goods, damaged stock and "not that bundle" all live in the cheap tail of the
-results — that is what the cheap tail *is*. So "the best deal available" is systematically those,
-and the better the extension gets at finding a bargain, the more often it lies.
+An older WB example, retained in the regression corpus, included an 828 ₽ offer alongside
+prices around 10 282 ₽. Its title and Apple brand field were not enough to verify the product;
+these are historical fixture values, not today's marketplace prices.
 
-A live example. WB results for `airpods pro 2`: normal price 10 282 ₽, cheapest item 828 ₽,
-titled "AirPods Pro 2 USB-C Оригинал", brand field set to Apple. The brand field is filled in by
-the seller and nobody verifies it. Right next to it sits "AiPods Pro 2", one letter swapped on purpose.
+The selector uses a trimmed median as one reference, discarding the bottom 20% and top 10%.
+If it differs too far from the open page's price, that reference is discarded. The page price
+is still only an extracted amount: it may depend on a bank, wallet or additional charges.
 
-So instead of the minimum, it computes the **usual** price: a median over comparable cards with
-the bottom 20% and top 10% discarded. And even that is not trusted unconditionally — on hyped
-products the fakes outnumber the genuine ones and drag the median down with them. If the median
-diverges from the open page's price by a multiple, it is thrown away and only the page's own
-price is used, because that one is always honest.
+After filtering, the selector takes the lowest displayed price among sufficiently similar
+remaining candidates, preferring those without a recorded doubt. The median is a filtering
+heuristic, not the price shown for the selected offer. Neither step verifies the lowest final purchase cost.
 
 Filtered out of the other marketplace's results:
 
@@ -67,31 +66,30 @@ Filtered out of the other marketplace's results:
 - **accessories** — cases, ear tips, cables, screen films. On WB also by the product category the
   API returns alongside the price: a case and a pair of headphones sit in different categories,
   which beats guessing from words;
-- **replicas** — by the phrasings sellers use to keep the listing alive: `1:1`, "люкс качество", "по мотивам";
+- **replica indicators** — phrases such as `1:1`, "люкс качество", "по мотивам";
 - **different configuration** — 10000 mAh instead of 20000, 128 GB instead of 256, one unit
-  instead of a three-pack. This is reason number one why "the same" product is suddenly half the price;
-- anything under a third of the open product's price.
+  instead of a three-pack, where the relevant specification is recognized;
+- prices below 35% of the open page's amount when that anchor is available — a heuristic that can also reject a genuine offer.
 
-## Three states, not two
+## Product confidence and source availability
 
 A row is not just "found / not found":
 
 | State | What is shown |
 |---|---|
-| **Confident** | Price and the difference in roubles |
-| **Unsure** | Dimmed price, **no** rouble difference, and the reason next to it: «похожий товар · другая ёмкость» |
+| **Match passes the checks** | Displayed price and a link; no savings calculation or best-price highlight |
+| **Unsure** | Dimmed price and a separate reason: «похожий товар · другой бренд» |
 | **No match** | «точного совпадения нет» and a link to the search |
+| **Source unavailable** | «не удалось узнать цену» and a link to the search |
 
-A difference in roubles is a promise that says *this is what you save*. Making that promise when
-what turned up is a replica or a different capacity is not acceptable. Better to write "similar
-product" than to draw "−6 662 ₽" and be wrong.
-
-Green marks the lowest price **among confident rows only**. Otherwise green would light up on
-exactly the counterfeit.
+Product confidence and price comparability are separate. None of the current sources confirms
+equivalent payment conditions and all mandatory charges, so no row gets a savings difference,
+an equality claim or a green best-price highlight. The price warning remains visible during
+loading and after successful, uncertain or failed responses; missing prices appear as `—`.
 
 ## Where the prices come from
 
-The same endpoints the marketplaces use to render their own search pages:
+The adapters read these search sources:
 
 | Marketplace | Source | Also returns |
 |---|---|---|
@@ -99,21 +97,25 @@ The same endpoints the marketplaces use to render their own search pages:
 | Ozon | `composer-api.bx` | rating, reviews, "verified brand" mark |
 | Яндекс Маркет | `schema.org` markup on the search page | offer URLs, absolute |
 
-No keys, no accounts. The price shown is the shelf price — the one a buyer sees, already
-including the marketplace's card discount.
+No marketplace API keys or extension account are required. The current row uses an amount
+extracted from the open product page; other rows use search results. Bank, Wallet and personal
+discounts, delivery and customs charges may differ or be absent from these amounts. Check the
+final price and payment terms on the marketplace before buying. Price-based filtering still
+uses these extracted amounts; it does not establish economic comparability.
 
-One detail that decides the architecture: **Ozon and Yandex Market do not answer a plain script,
-only a browser.** The extension runs inside your browser, so it has that data; a server-side
-scraper would not.
+Requests run inside your browser and can use its marketplace session when the browser permits
+it. This does not guarantee access: a marketplace can return HTTP 403, require a CAPTCHA or
+otherwise reject a request. Price comparison depends on its search endpoints remaining available.
 
 ## Tests
 
-19 offline checks cover spec parsing, query building, accessory rejection, service-worker cache
-identity and, above all, picking the *usual* price rather than the lowest one. No dependencies:
-the checks need neither a browser nor a DOM and never contact a marketplace.
+`npm run check` passed 110 offline checks on 2026-09-07: 87 core, 8 background,
+2 content lifecycle, 1 privacy-copy and 12 panel-pricing checks. They use Node without installed
+dependencies or marketplace requests. The renderer tests execute the real `panel.js` against a
+small DOM tree; they do not measure browser layout.
 
 ```bash
-npm test
+npm run check
 ```
 
 Each check holds a failure that already happened or would have been expensive:
@@ -121,22 +123,34 @@ Each check holds a failure that already happened or would have been expensive:
 - **`\b` against Cyrillic.** In JavaScript a word boundary is Latin-only, so `/мАч\b/` never
   fires — the entire spec-matching layer dies silently on Russian titles and products start
   "matching" wrongly.
-- **The bait in the cheap tail.** On live WB results for `airpods pro 2` the usual price is
-  10 282 ₽ while the cheapest item is 828 ₽, brand field set to Apple by the seller. The test
-  demands the computed price stay near ten thousand rather than drift to the counterfeit.
-- **Anchor off by a multiple** — the median is discarded and only the open page's price is used.
+- **A low-price outlier.** The saved 828 ₽ fixture must not drag the trimmed reference below
+  9 000 ₽. This tests the estimator, not authenticity or today's prices.
+- **Anchor off by a multiple** — the median reference is discarded; the remaining page-price
+  heuristic still does not verify payment conditions.
 - **Model-code boundaries.** `S10` must not match `S100`, while a split `WH 1000 XM5` must still
   match `WH1000XM5`.
 - **Cache identity.** Two capacities that intentionally share the same search query must not share
   the service worker's ten-minute result cache.
+- **Two memory values.** `8 GB 256 GB` must match its joined spelling, while a changed RAM,
+  storage value or model must not pass. Reordered repeated units are conservatively rejected.
+- **Unverified price basis.** The real renderer preserves numbers and product warnings but shows
+  no savings, equality or best-price highlight; repeated updates clear obsolete labels and links.
+
+A bounded Brave check on 2026-09-07 also verified panels on selected Ozon and Yandex Market
+product pages after the fix: prices remained visible, comparison highlights/deltas were absent,
+and the full warning fitted. This does not validate all products, browsers or checkout totals.
 
 ## Privacy
 
-- Nothing is sent anywhere. No account, no backend, no analytics.
-- Nothing is stored except two toggles in browser storage.
-- Network access is limited to three hosts, declared in the manifest.
+- There is no backend of our own and no analytics.
+- To compare prices, the search query is sent directly to the marketplace endpoints:
+  `www.ozon.ru`, `search.wb.ru` and `market.yandex.ru`.
+- Requests are made by the browser and use the current marketplace session cookies when the browser permits them.
+- Nothing is persistently stored except two toggles in browser storage.
+  Search answers are cached in volatile service-worker memory and reused for no more than ten minutes.
+- Network access is limited to the three hosts declared in the manifest.
 
-No price history — there is no honest way to obtain it without a backend, so it is not offered.
+Price history is not implemented.
 
 ## Install
 
@@ -144,7 +158,8 @@ No price history — there is no honest way to obtain it without a backend, so i
 chrome://extensions → Developer mode → Load unpacked → this folder
 ```
 
-Works in Chrome, Yandex Browser, Edge and other Chromium browsers.
+Designed for Chromium browsers supporting Manifest V3. The dated live check above used Brave;
+compatibility with every Chromium distribution has not been verified.
 
 ## Files
 
@@ -153,11 +168,11 @@ Works in Chrome, Yandex Browser, Edge and other Chromium browsers.
 | `manifest.json` | extension descriptor |
 | `src/config.js` | constants: marketplaces, WB price region, price thresholds |
 | `src/query.js` | title → query, spec parsing, match scoring |
-| `src/pick.js` | offer selection: usual price instead of the minimum |
+| `src/pick.js` | offer selection after title/specification and price heuristics |
 | `src/sources.js` | the three price sources (live in the service worker) |
 | `src/background.js` | polls the marketplaces, caches answers for 10 minutes |
 | `src/detect.js` | identifies product, price and brand on the current page |
-| `src/panel.js` | panel rendering, the three row states |
+| `src/panel.js` | prices, product-match states and a visible price-conditions warning |
 | `src/panel.css` | its styles, light and dark theme |
 | `src/content.js` | entry point, follows in-site navigation |
 | `popup/` | popup with the on/off switch |
