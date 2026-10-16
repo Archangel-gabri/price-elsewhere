@@ -201,3 +201,5 @@ lookarounds: `(?<![а-яё])` and `(?![a-zа-яё0-9])`.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
